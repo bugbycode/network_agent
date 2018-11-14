@@ -6,7 +6,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.bugbycode.agent.handler.AgentHandler;
-import com.bugbycode.client.handler.ClientHandler;
+import com.bugbycode.client.startup.NettyClient;
+import com.bugbycode.thread.LocalClientThreadPool;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
@@ -30,13 +31,17 @@ public class AgentServer implements Runnable {
 	
 	private Map<String,AgentHandler> agentHandlerMap;
 	
-	private Map<String,ClientHandler> clientHandlerMap;
+	private Map<String,NettyClient> nettyClientMap;
+	
+	private LocalClientThreadPool threadPool;
 	
 	public AgentServer(int agentPort,Map<String,AgentHandler> agentHandlerMap,
-			Map<String,ClientHandler> clientHandlerMap) {
+			Map<String,NettyClient> nettyClientMap,
+			LocalClientThreadPool threadPool) {
 		this.agentPort = agentPort;
 		this.agentHandlerMap = agentHandlerMap;
-		this.clientHandlerMap = clientHandlerMap;
+		this.nettyClientMap = nettyClientMap;
+		this.threadPool = threadPool;
 	}
 	
 	@Override
@@ -52,7 +57,8 @@ public class AgentServer implements Runnable {
 
 			@Override
 			protected void initChannel(SocketChannel ch) throws Exception {
-				ch.pipeline().addLast(new AgentHandler(agentHandlerMap, clientHandlerMap));
+				ch.pipeline().addLast(new AgentHandler(agentHandlerMap,
+						nettyClientMap,threadPool));
 			}
 		});
 		

@@ -1,22 +1,19 @@
 package com.bugbycode.agent.handler;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Proxy;
-import java.net.Socket;
-import java.net.UnknownHostException;
+import java.util.LinkedList;
 import java.util.Map;
-import java.util.Properties;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.bugbycode.client.handler.ClientHandler;
 import com.bugbycode.client.startup.NettyClient;
+import com.bugbycode.module.ConnectionInfo;
+import com.bugbycode.module.Message;
+import com.bugbycode.module.MessageCode;
 import com.bugbycode.module.Protocol;
+import com.bugbycode.thread.LocalClientThreadPool;
+import com.util.RandomUtil;
+import com.util.StringUtil;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -29,133 +26,196 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 	
 	private Map<String,AgentHandler> agentHandlerMap;
 	
-	private Map<String,ClientHandler> clientHandlerMap;
-	
-	private Socket socket = null;
-	
-	private InputStream in = null;
-	
-	private OutputStream out = null;
+	private Map<String,NettyClient> nettyClientMap;
 	
 	private boolean firstConnect = false;
 	
-	public AgentHandler(Map<String, AgentHandler> agentHandlerMap, Map<String, ClientHandler> clientHandlerMap) {
+	private LocalClientThreadPool threadPool;
+	
+	private final String token;
+	
+	private LinkedList<Message> queue;
+	
+	private boolean isClosed;
+	
+	public AgentHandler(Map<String, AgentHandler> agentHandlerMap, 
+			Map<String,NettyClient> nettyClientMap,LocalClientThreadPool threadPool) {
 		this.agentHandlerMap = agentHandlerMap;
-		this.clientHandlerMap = clientHandlerMap;
+		this.nettyClientMap = nettyClientMap;
+		this.threadPool = threadPool;
 		this.firstConnect = true;
+		this.queue = new LinkedList<Message>();
+		this.token = RandomUtil.GetGuid32();
 	}
 
 	@Override
 	protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) throws Exception {
 		byte[] data = new byte[msg.readableBytes()];
 		msg.readBytes(data);
-		Properties pro = System.getProperties();
-		System.out.println(pro);
 		if(firstConnect) {
 			firstConnect = false;
+
 			String connectionStr = new String(data).trim();
-			System.out.println("data : " + connectionStr);
+			logger.info(connectionStr);
+			
 			String[] connectArr = connectionStr.split("\r\n");
-			String protocolData = connectArr[0];
-			String serverData = connectArr[1];
-			int port = 443;
+			
+			int port = 0;
 			String host = "";
 			int protocol = Protocol.HTTP;
-			if(protocolData.startsWith("GET")) {
-				if(protocolData.startsWith("GET ftp:")) {
-					protocol = Protocol.FTP;
-				}
-			}else if(protocolData.startsWith("CONNECT")) {
-				protocol = Protocol.HTTPS;
-			}else {
-				throw new RuntimeException("协议错误");
-			}
 			
-			if(serverData.startsWith("Host:")) {
-				String[] serverArr = serverData.split(":");
-				int len = serverArr.length;
-				if(len == 2) {
-					if(protocol == Protocol.HTTPS) {
-						port = 443;
-					}else if(protocol == Protocol.HTTP) {
-						port = 80;
-					}else if(protocol == Protocol.FTP) {
-						port = 21;
+			for(String dataStr : connectArr) {
+				if(dataStr.startsWith("GET")) {
+					if(dataStr.startsWith("GET ftp:")) {
+						protocol = Protocol.FTP;
 					}
-					host = serverArr[1];
-				}else if(len == 3) {
-					port = Integer.valueOf(serverArr[2]);
-					host = serverArr[1];
-				}else {
-					throw new RuntimeException("主机信息错误");
+				}else if(dataStr.startsWith("CONNECT")) {
+					protocol = Protocol.HTTPS;
+				}else if(dataStr.startsWith("Host:")) {
+					String[] serverArr = dataStr.split(":");
+					int len = serverArr.length;
+					if(len == 2) {
+						if(protocol == Protocol.HTTPS) {
+							port = 443;
+						}else if(protocol == Protocol.HTTP) {
+							port = 80;
+						}else if(protocol == Protocol.FTP) {
+							port = 21;
+						}
+						host = serverArr[1];
+					}else if(len == 3) {
+						port = Integer.valueOf(serverArr[2]);
+						host = serverArr[1];
+					}else {
+						throw new RuntimeException("主机信息错误");
+					}
+				}else if(dataStr.startsWith("Proxy-Connection:")) {
+					dataStr = dataStr.replace("Proxy-Connection:", "Connection:");
 				}
-			}else {
-				throw new RuntimeException("主机信息错误");
 			}
 			
-			//new NettyClient(host,port).connection();
+			if(StringUtil.isBlank(host) || port == 0) {
+				throw new RuntimeException("协议信息错误");
+			}
 			
+			host = host.trim();
+			
+			ConnectionInfo con = new ConnectionInfo(host, port);
+			Message conMsg = new Message(token, MessageCode.CONNECTION, con);
+			
+			threadPool.addMessage(conMsg);
+			
+			Message message = read();
+			
+			if(message.getType() == MessageCode.CONNECTION_ERROR) {
+				throw new RuntimeException("连接目标服务器失败");
+			}
+			
+			new WorkThread(ctx).start();
+			
+			message.setType(MessageCode.TRANSFER_DATA);
+			message.setToken(token);
 			if(protocol == Protocol.HTTPS) {
 				String response = "HTTP/1.1 200 Connection Established\r\n\r\n";
 				byte[] res = response.getBytes();
-				ByteBuf buff = ctx.alloc().buffer(res.length);
-				buff.writeBytes(res);
-				ctx.channel().writeAndFlush(res);
+				message.setData(res);
+				sendMessage(message);
 			}else {
-				//forward(data);
+				NettyClient client = nettyClientMap.get(token);
+				if(client == null) {
+					throw new RuntimeException("TOKEN错误，找不到对应的客户端");
+				}
+				ByteBuf buff = ctx.alloc().buffer(data.length);
+				buff.writeBytes(data);
+				client.writeAndFlush(buff);
 			}
-			new MyThread(ctx.channel()).start();
 		}else {
-			//forward(data);
+			NettyClient client = nettyClientMap.get(token);
+			if(client == null) {
+				throw new RuntimeException("TOKEN错误，找不到对应的客户端");
+			}
+			ByteBuf buff = ctx.alloc().buffer(data.length);
+			buff.writeBytes(data);
+			client.writeAndFlush(buff);
 		}
 	}
 	
 	@Override
 	public void channelInactive(ChannelHandlerContext ctx) throws Exception {
 		//关闭连接
-		if(socket != null) {
-			socket.close();
+		logger.info("客户端连接已关闭");
+		NettyClient client = nettyClientMap.get(token);
+		if(client != null) {
+			client.close();
 		}
+		agentHandlerMap.remove(token);
+		this.isClosed = true;
+		notifyTask();
+	}
+	
+	@Override
+	public void channelActive(ChannelHandlerContext ctx) throws Exception {
+		super.channelActive(ctx);
+		this.isClosed = false;
+		agentHandlerMap.put(token, this);
 	}
 	
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
 		logger.error(cause.getMessage());
-		cause.getStackTrace();
+		ctx.channel().close();
 	}
 	
-	private class MyThread extends Thread{
-		
-		private Channel channel;
-		
-		public MyThread(Channel channel) {
-			this.channel = channel;
+	public synchronized void sendMessage(Message msg) {
+		queue.addLast(msg);
+		notifyTask();
+	}
+	
+	private synchronized void notifyTask() {
+		this.notifyAll();
+	}
+	
+	private synchronized Message read() throws InterruptedException {
+		while(queue.isEmpty()) {
+			wait();
+			if(isClosed) {
+				throw new InterruptedException("Client closed." + token);
+			}
 		}
+		return queue.removeFirst();
+	}
+	
+	private class WorkThread extends Thread{
 
+		private ChannelHandlerContext ctx;
+		
+		public WorkThread(ChannelHandlerContext ctx) {
+			this.ctx = ctx;
+		}
+		
 		@Override
 		public void run() {
-			byte[] buff = new byte[4096];
-			int len = -1;
-			try {
-				while((len = in.read(buff)) != -1) {
-					ByteBuf data = channel.alloc().buffer(len);
-					data.writeBytes(buff, 0, len);
-					channel.writeAndFlush(data);
+			Channel channel = ctx.channel();
+			while(!isClosed) {
+				try {
+					Message msg = read();
+					if(msg.getType() == MessageCode.CLOSE_CONNECTION) {
+						continue;
+					}
+					
+					if(msg.getType() != MessageCode.TRANSFER_DATA) {
+						continue;
+					}
+					
+					byte[] data = (byte[]) msg.getData();
+					ByteBuf buff = ctx.alloc().buffer(data.length);
+					buff.writeBytes(data);
+					channel.writeAndFlush(buff);
+				} catch (InterruptedException e) {
+					logger.error(e.getMessage());
 				}
-			} catch (IOException e) {
-				e.printStackTrace();
 			}
 		}
 		
 	}
-	
-	private void forward(byte[] data) {
-		try {
-			out.write(data);
-			out.flush();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-
 }
