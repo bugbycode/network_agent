@@ -10,12 +10,20 @@ import org.springframework.context.annotation.Configuration;
 import com.bugbycode.agent.handler.AgentHandler;
 import com.bugbycode.client.startup.NettyClient;
 
+import io.netty.channel.group.ChannelGroup;
+import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.util.concurrent.GlobalEventExecutor;
 
 @Configuration
 public class AppConfig {
 	
 	public static final int WORK_THREAD_NUMBER = 100;
+	
+	@Bean("channelGroup")
+	public ChannelGroup getChannelGroup() {
+		return new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
+	}
 	
 	@Bean
 	public Map<String,NettyClient> nettyClientMap(){
