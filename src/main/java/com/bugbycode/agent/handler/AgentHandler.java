@@ -66,8 +66,11 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 			int protocol = Protocol.HTTP;
 			
 			for(String dataStr : connectArr) {
-				if(dataStr.startsWith("GET") || dataStr.startsWith("POST")) {
-					if(dataStr.startsWith("GET ftp:")) {
+				if(dataStr.startsWith("GET") || dataStr.startsWith("POST")
+						 || dataStr.startsWith("HEAD") || dataStr.startsWith("OPTIONS")
+						 || dataStr.startsWith("PUT") || dataStr.startsWith("DELETE")
+						 || dataStr.startsWith("TRACE")) {
+					if(dataStr.contains("ftp:")) {
 						protocol = Protocol.FTP;
 					}
 				}else if(dataStr.startsWith("CONNECT")) {
