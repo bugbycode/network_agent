@@ -1,7 +1,5 @@
 package com.bugbycode.forward.client;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -9,9 +7,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.bugbycode.agent.handler.AgentHandler;
-import com.bugbycode.client.handler.ClientHandler;
 import com.bugbycode.config.HandlerConst;
 import com.bugbycode.config.IdleConfig;
+import com.bugbycode.forward.handler.ClientHandler;
 import com.bugbycode.handler.MessageDecoder;
 import com.bugbycode.handler.MessageEncoder;
 import com.bugbycode.module.Authentication;
@@ -45,12 +43,13 @@ public class StartupRunnable implements Runnable {
 	
 	private ChannelFuture future;
 	
-	public StartupRunnable(String host, int port, String username, String password) {
+	public StartupRunnable(String host, int port, String username, String password,
+			Map<String,AgentHandler> agentHandlerMap) {
 		this.host = host;
 		this.port = port;
 		this.username = username;
 		this.password = password;
-		this.agentHandlerMap = Collections.synchronizedMap(new HashMap<String,AgentHandler>());
+		this.agentHandlerMap = agentHandlerMap;
 	}
 
 	@Override
@@ -71,7 +70,7 @@ public class StartupRunnable implements Runnable {
 							HandlerConst.LENGTH_FIELD_LENGTH, HandlerConst.LENGTH_AD_JUSTMENT, 
 							HandlerConst.INITIAL_BYTES_TO_STRIP));
 				 ch.pipeline().addLast(new MessageEncoder());
-				 //ch.pipeline().addLast(new ClientHandler(StartupRunnable.this,nettyClientMap));
+				 ch.pipeline().addLast(new ClientHandler(agentHandlerMap));
 			}
 			
 		});
@@ -95,13 +94,7 @@ public class StartupRunnable implements Runnable {
 		});
 	}
 	
-	public synchronized void writeAndFlush(Object msg) {
+	public void writeAndFlush(Object msg) {
 		future.channel().writeAndFlush(msg);
-	}
-
-	public void close() {
-		if(future != null) {
-			future.channel().close();
-		}
 	}
 }
