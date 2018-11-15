@@ -126,7 +126,12 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 				byte[] res = response.getBytes();
 				message.setData(res);
 				sendMessage(message);
-			}else {
+			}else if(protocol == Protocol.FTP){
+				String response = "HTTP/1.1 200 Connection Established\r\n\r\n";
+				byte[] res = response.getBytes();
+				message.setData(res);
+				sendMessage(message);
+			}else{
 				NettyClient client = nettyClientMap.get(token);
 				if(client == null) {
 					throw new RuntimeException("token error.");
