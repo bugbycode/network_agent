@@ -10,8 +10,12 @@ import org.springframework.context.annotation.Configuration;
 import com.bugbycode.agent.handler.AgentHandler;
 import com.bugbycode.client.startup.NettyClient;
 
+import io.netty.channel.nio.NioEventLoopGroup;
+
 @Configuration
 public class AppConfig {
+	
+	public static final int WORK_THREAD_NUMBER = 100;
 	
 	@Bean
 	public Map<String,NettyClient> nettyClientMap(){
@@ -23,4 +27,8 @@ public class AppConfig {
 		return Collections.synchronizedMap(new HashMap<String,AgentHandler>());
 	}
 	
+	@Bean
+	public NioEventLoopGroup remoteGroup() {
+		return new NioEventLoopGroup(WORK_THREAD_NUMBER);
+	}
 }

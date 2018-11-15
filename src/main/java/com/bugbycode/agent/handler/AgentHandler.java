@@ -11,13 +11,13 @@ import com.bugbycode.module.ConnectionInfo;
 import com.bugbycode.module.Message;
 import com.bugbycode.module.MessageCode;
 import com.bugbycode.module.Protocol;
-import com.bugbycode.thread.LocalClientThreadPool;
 import com.util.RandomUtil;
 import com.util.StringUtil;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.SimpleChannelInboundHandler;
 
 public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
@@ -30,7 +30,7 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 	
 	private boolean firstConnect = false;
 	
-	private LocalClientThreadPool threadPool;
+	private EventLoopGroup remoteGroup;
 	
 	private final String token;
 	
@@ -39,10 +39,11 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 	private boolean isClosed;
 	
 	public AgentHandler(Map<String, AgentHandler> agentHandlerMap, 
-			Map<String,NettyClient> nettyClientMap,LocalClientThreadPool threadPool) {
+			Map<String,NettyClient> nettyClientMap,
+			EventLoopGroup remoteGroup) {
 		this.agentHandlerMap = agentHandlerMap;
 		this.nettyClientMap = nettyClientMap;
-		this.threadPool = threadPool;
+		this.remoteGroup = remoteGroup;
 		this.firstConnect = true;
 		this.queue = new LinkedList<Message>();
 		this.token = RandomUtil.GetGuid32();
@@ -65,7 +66,7 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 			int protocol = Protocol.HTTP;
 			
 			for(String dataStr : connectArr) {
-				if(dataStr.startsWith("GET")) {
+				if(dataStr.startsWith("GET") || dataStr.startsWith("POST")) {
 					if(dataStr.startsWith("GET ftp:")) {
 						protocol = Protocol.FTP;
 					}
@@ -87,7 +88,7 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 						port = Integer.valueOf(serverArr[2]);
 						host = serverArr[1];
 					}else {
-						throw new RuntimeException("主机信息错误");
+						throw new RuntimeException("Host error.");
 					}
 				}else if(dataStr.startsWith("Proxy-Connection:")) {
 					dataStr = dataStr.replace("Proxy-Connection:", "Connection:");
@@ -95,7 +96,7 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 			}
 			
 			if(StringUtil.isBlank(host) || port == 0) {
-				throw new RuntimeException("协议信息错误");
+				throw new RuntimeException("Protocol error.");
 			}
 			
 			host = host.trim();
@@ -103,12 +104,14 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 			ConnectionInfo con = new ConnectionInfo(host, port);
 			Message conMsg = new Message(token, MessageCode.CONNECTION, con);
 			
-			threadPool.addMessage(conMsg);
+			//threadPool.addMessage(conMsg);
+			new NettyClient(conMsg, nettyClientMap, agentHandlerMap,remoteGroup)
+			.connection();
 			
 			Message message = read();
 			
 			if(message.getType() == MessageCode.CONNECTION_ERROR) {
-				throw new RuntimeException("连接目标服务器失败");
+				throw new RuntimeException("Connection to " + host + ":" + port + " failed.");
 			}
 			
 			new WorkThread(ctx).start();
@@ -123,7 +126,7 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 			}else {
 				NettyClient client = nettyClientMap.get(token);
 				if(client == null) {
-					throw new RuntimeException("TOKEN错误，找不到对应的客户端");
+					throw new RuntimeException("token error.");
 				}
 				ByteBuf buff = ctx.alloc().buffer(data.length);
 				buff.writeBytes(data);
@@ -132,7 +135,7 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 		}else {
 			NettyClient client = nettyClientMap.get(token);
 			if(client == null) {
-				throw new RuntimeException("TOKEN错误，找不到对应的客户端");
+				throw new RuntimeException("token error.");
 			}
 			ByteBuf buff = ctx.alloc().buffer(data.length);
 			buff.writeBytes(data);
@@ -143,7 +146,7 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 	@Override
 	public void channelInactive(ChannelHandlerContext ctx) throws Exception {
 		//关闭连接
-		logger.info("客户端连接已关闭");
+		logger.info("User client exit.");
 		NettyClient client = nettyClientMap.get(token);
 		if(client != null) {
 			client.close();
@@ -200,6 +203,7 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 				try {
 					Message msg = read();
 					if(msg.getType() == MessageCode.CLOSE_CONNECTION) {
+						ctx.close();
 						continue;
 					}
 					

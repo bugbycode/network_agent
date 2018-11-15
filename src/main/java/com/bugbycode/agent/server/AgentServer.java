@@ -7,7 +7,7 @@ import org.apache.logging.log4j.Logger;
 
 import com.bugbycode.agent.handler.AgentHandler;
 import com.bugbycode.client.startup.NettyClient;
-import com.bugbycode.thread.LocalClientThreadPool;
+import com.bugbycode.conf.AppConfig;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
@@ -33,22 +33,22 @@ public class AgentServer implements Runnable {
 	
 	private Map<String,NettyClient> nettyClientMap;
 	
-	private LocalClientThreadPool threadPool;
+	private EventLoopGroup remoteGroup;
 	
 	public AgentServer(int agentPort,Map<String,AgentHandler> agentHandlerMap,
 			Map<String,NettyClient> nettyClientMap,
-			LocalClientThreadPool threadPool) {
+			EventLoopGroup remoteGroup) {
 		this.agentPort = agentPort;
 		this.agentHandlerMap = agentHandlerMap;
 		this.nettyClientMap = nettyClientMap;
-		this.threadPool = threadPool;
+		this.remoteGroup = remoteGroup;
 	}
 	
 	@Override
 	public void run() {
 		ServerBootstrap bootstrap = new ServerBootstrap();
-		boss = new NioEventLoopGroup();
-		worker = new NioEventLoopGroup();
+		boss = new NioEventLoopGroup(AppConfig.WORK_THREAD_NUMBER);
+		worker = new NioEventLoopGroup(AppConfig.WORK_THREAD_NUMBER);
 		bootstrap.group(boss, worker).channel(NioServerSocketChannel.class)
 		.option(ChannelOption.SO_BACKLOG, 5000)
 		.option(ChannelOption.TCP_NODELAY, true)
@@ -58,7 +58,7 @@ public class AgentServer implements Runnable {
 			@Override
 			protected void initChannel(SocketChannel ch) throws Exception {
 				ch.pipeline().addLast(new AgentHandler(agentHandlerMap,
-						nettyClientMap,threadPool));
+						nettyClientMap,remoteGroup));
 			}
 		});
 		

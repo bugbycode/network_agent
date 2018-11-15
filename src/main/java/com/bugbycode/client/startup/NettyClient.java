@@ -17,7 +17,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 
@@ -44,9 +43,9 @@ public class NettyClient {
 	private String token = "";
 	
 	public NettyClient(Message msg,Map<String,NettyClient> nettyClientMap,
-			Map<String,AgentHandler> agentHandlerMap) {
+			Map<String,AgentHandler> agentHandlerMap,EventLoopGroup remoteGroup) {
 		this.remoteClient = new Bootstrap();
-		this.remoteGroup = new NioEventLoopGroup();
+		this.remoteGroup = remoteGroup;
 		this.nettyClientMap = nettyClientMap;
 		this.nettyClientMap.put(msg.getToken(), this);
 		this.agentHandlerMap = agentHandlerMap;
@@ -103,11 +102,11 @@ public class NettyClient {
 		}
 		future.channel().close();
 		
-		if(remoteGroup == null) {
-			return;
-		}
-		
-		remoteGroup.shutdownGracefully();
+//		if(remoteGroup == null) {
+//			return;
+//		}
+//		
+//		remoteGroup.shutdownGracefully();
 		
 		Message message = new Message(token, MessageCode.CLOSE_CONNECTION, null);
 		AgentHandler handler = agentHandlerMap.get(token);

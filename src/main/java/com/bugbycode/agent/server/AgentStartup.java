@@ -10,7 +10,8 @@ import org.springframework.stereotype.Component;
 
 import com.bugbycode.agent.handler.AgentHandler;
 import com.bugbycode.client.startup.NettyClient;
-import com.bugbycode.thread.LocalClientThreadPool;
+
+import io.netty.channel.EventLoopGroup;
 
 @Component
 @Configuration
@@ -22,10 +23,12 @@ public class AgentStartup implements ApplicationRunner {
 	@Autowired
 	private Map<String,NettyClient> nettyClientMap;
 	
+	@Autowired
+	private EventLoopGroup remoteGroup;
+	
 	@Override
 	public void run(ApplicationArguments args) throws Exception {
-		LocalClientThreadPool threadPool = new LocalClientThreadPool(agentHandlerMap, nettyClientMap);
-		AgentServer server = new AgentServer(50000, agentHandlerMap,nettyClientMap,threadPool);
+		AgentServer server = new AgentServer(50000, agentHandlerMap,nettyClientMap,remoteGroup);
 		new Thread(server).start();
 	}
 
