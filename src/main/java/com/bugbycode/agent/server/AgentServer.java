@@ -8,6 +8,7 @@ import org.apache.logging.log4j.Logger;
 import com.bugbycode.agent.handler.AgentHandler;
 import com.bugbycode.client.startup.NettyClient;
 import com.bugbycode.conf.AppConfig;
+import com.bugbycode.forward.client.StartupRunnable;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
@@ -31,17 +32,25 @@ public class AgentServer implements Runnable {
 	
 	private Map<String,AgentHandler> agentHandlerMap;
 	
+	private Map<String,AgentHandler> forwardHandlerMap;
+	
 	private Map<String,NettyClient> nettyClientMap;
 	
 	private EventLoopGroup remoteGroup;
 	
+	private StartupRunnable startup;
+	
 	public AgentServer(int agentPort,Map<String,AgentHandler> agentHandlerMap,
+			Map<String,AgentHandler> forwardHandlerMap,
 			Map<String,NettyClient> nettyClientMap,
-			EventLoopGroup remoteGroup) {
+			EventLoopGroup remoteGroup,
+			StartupRunnable startup) {
 		this.agentPort = agentPort;
 		this.agentHandlerMap = agentHandlerMap;
+		this.forwardHandlerMap = forwardHandlerMap;
 		this.nettyClientMap = nettyClientMap;
 		this.remoteGroup = remoteGroup;
+		this.startup = startup;
 	}
 	
 	@Override
@@ -58,7 +67,8 @@ public class AgentServer implements Runnable {
 			@Override
 			protected void initChannel(SocketChannel ch) throws Exception {
 				ch.pipeline().addLast(new AgentHandler(agentHandlerMap,
-						nettyClientMap,remoteGroup));
+						forwardHandlerMap,
+						nettyClientMap,remoteGroup,startup));
 			}
 		});
 		
@@ -69,6 +79,7 @@ public class AgentServer implements Runnable {
 				if (future.isSuccess()) {
 					logger.info("Agent server startup successfully, port " + agentPort + "......");
 				} else {
+					future.cause().printStackTrace();
 					logger.info("Agent server startup failed, port " + agentPort + "......");
 					close();
 				}

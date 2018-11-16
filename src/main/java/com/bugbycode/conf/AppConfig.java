@@ -36,6 +36,11 @@ public class AppConfig {
 	}
 	
 	@Bean
+	public Map<String,AgentHandler> forwardHandlerMap(){
+		return Collections.synchronizedMap(new HashMap<String,AgentHandler>());
+	}
+	
+	@Bean
 	public NioEventLoopGroup remoteGroup() {
 		return new NioEventLoopGroup(WORK_THREAD_NUMBER);
 	}

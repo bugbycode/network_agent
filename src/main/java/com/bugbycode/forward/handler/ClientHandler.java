@@ -28,27 +28,45 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
 	@Override
 	public void channelActive(ChannelHandlerContext ctx) throws Exception {
 		super.channelActive(ctx);
+		logger.info("Connection to server successfully.");
 	}
 
 	@Override
 	public void channelInactive(ChannelHandlerContext ctx) throws Exception {
 		super.channelInactive(ctx);
+		logger.info("Connection closed.");
 		Set<String> set = agentHandlerMap.keySet();
 		for(String token : set) {
 			AgentHandler handler = agentHandlerMap.get(token);
 			Message message = new Message(token, MessageCode.CLOSE_CONNECTION, null);
 			handler.sendMessage(message);
 		}
-		agentHandlerMap.clear();
 	}
 
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 		Message message = (Message) msg;
-		int type = message.getType();
 		String token = message.getToken();
-		if(type == MessageCode.CLOSE_CONNECTION) {
-			
+		int type = message.getType();
+		if(type == MessageCode.HEARTBEAT) {
+			//
+		}else if(type == MessageCode.AUTH_SUCCESS) {
+			//
+			logger.info("Auth successfully.");
+		}else if(type == MessageCode.AUTH_ERROR) {
+			//
+			logger.info("Auth failed.");
+			ctx.close();
+		}else {
+			AgentHandler handler = agentHandlerMap.get(token);
+			if(handler == null) {
+				message.setData(null);
+				message.setType(MessageCode.CLOSE_CONNECTION);
+				message.setToken(token);
+				ctx.writeAndFlush(message);
+				return;
+			}
+			handler.sendMessage(message);
 		}
 	}
 

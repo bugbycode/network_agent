@@ -7,6 +7,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.bugbycode.client.startup.NettyClient;
+import com.bugbycode.forward.client.StartupRunnable;
 import com.bugbycode.module.ConnectionInfo;
 import com.bugbycode.module.Message;
 import com.bugbycode.module.MessageCode;
@@ -26,11 +27,17 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 	
 	private Map<String,AgentHandler> agentHandlerMap;
 	
+	private Map<String,AgentHandler> forwardHandlerMap;
+	
 	private Map<String,NettyClient> nettyClientMap;
 	
 	private boolean firstConnect = false;
 	
+	private boolean isForward = false;
+	
 	private EventLoopGroup remoteGroup;
+	
+	private StartupRunnable startup;
 	
 	private final String token;
 	
@@ -39,11 +46,15 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 	private boolean isClosed;
 	
 	public AgentHandler(Map<String, AgentHandler> agentHandlerMap, 
+			Map<String,AgentHandler> forwardHandlerMap,
 			Map<String,NettyClient> nettyClientMap,
-			EventLoopGroup remoteGroup) {
+			EventLoopGroup remoteGroup,
+			StartupRunnable startup) {
 		this.agentHandlerMap = agentHandlerMap;
+		this.forwardHandlerMap = forwardHandlerMap;
 		this.nettyClientMap = nettyClientMap;
 		this.remoteGroup = remoteGroup;
+		this.startup = startup;
 		this.firstConnect = true;
 		this.queue = new LinkedList<Message>();
 		this.token = RandomUtil.GetGuid32();
@@ -104,17 +115,43 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 			
 			host = host.trim();
 			
+			/*if(host.endsWith("google.com") || host.endsWith("facebook.com")
+					 || host.endsWith("youtube.com") || 
+					 host.endsWith("ytimg.com")) {
+				isForward = true;
+			}*/
+			
 			ConnectionInfo con = new ConnectionInfo(host, port);
 			Message conMsg = new Message(token, MessageCode.CONNECTION, con);
 			
 			//threadPool.addMessage(conMsg);
+			
+			/*if(isForward) {
+				forwardHandlerMap.put(token, this);
+				startup.writeAndFlush(conMsg);
+			}else {
+				new NettyClient(conMsg, nettyClientMap, agentHandlerMap,remoteGroup)
+				.connection();
+			}*/
+			
 			new NettyClient(conMsg, nettyClientMap, agentHandlerMap,remoteGroup)
 			.connection();
 			
 			Message message = read();
 			
 			if(message.getType() == MessageCode.CONNECTION_ERROR) {
-				throw new RuntimeException("Connection to " + host + ":" + port + " failed.");
+				
+				forwardHandlerMap.put(token, this);
+				
+				startup.writeAndFlush(conMsg);
+				
+				message = read();
+				
+				if(message.getType() == MessageCode.CONNECTION_ERROR) {
+					throw new RuntimeException("Connection to " + host + ":" + port + " failed.");
+				}
+				
+				isForward = true;
 			}
 			
 			new WorkThread(ctx).start();
@@ -132,6 +169,29 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 				message.setData(res);
 				sendMessage(message);
 			}else{
+				if(isForward) {
+					message.setType(MessageCode.TRANSFER_DATA);
+					message.setData(data);
+					message.setToken(token);
+					startup.writeAndFlush(message);
+				}else {
+					NettyClient client = nettyClientMap.get(token);
+					if(client == null) {
+						throw new RuntimeException("token error.");
+					}
+					ByteBuf buff = ctx.alloc().buffer(data.length);
+					buff.writeBytes(data);
+					client.writeAndFlush(buff);
+				}
+			}
+		}else {
+			if(isForward) {
+				Message message = new Message();
+				message.setType(MessageCode.TRANSFER_DATA);
+				message.setData(data);
+				message.setToken(token);
+				startup.writeAndFlush(message);
+			}else {
 				NettyClient client = nettyClientMap.get(token);
 				if(client == null) {
 					throw new RuntimeException("token error.");
@@ -140,14 +200,6 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 				buff.writeBytes(data);
 				client.writeAndFlush(buff);
 			}
-		}else {
-			NettyClient client = nettyClientMap.get(token);
-			if(client == null) {
-				throw new RuntimeException("token error.");
-			}
-			ByteBuf buff = ctx.alloc().buffer(data.length);
-			buff.writeBytes(data);
-			client.writeAndFlush(buff);
 		}
 	}
 	
@@ -160,6 +212,7 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 			client.close();
 		}
 		agentHandlerMap.remove(token);
+		forwardHandlerMap.remove(token);
 		this.isClosed = true;
 		notifyTask();
 	}
