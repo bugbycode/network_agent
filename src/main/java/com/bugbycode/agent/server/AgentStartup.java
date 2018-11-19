@@ -3,6 +3,7 @@ package com.bugbycode.agent.server;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Configuration;
@@ -30,9 +31,28 @@ public class AgentStartup implements ApplicationRunner {
 	@Autowired
 	private EventLoopGroup remoteGroup;
 	
+	@Value("${spring.keystore.path}")
+	private String keystorePath;
+	
+	@Value("${spring.keystore.password}")
+	private String keystorePassword;
+	
+	@Value("${spring.netty.auth.host}")
+	private String host;
+	
+	@Value("${spring.netty.auth.port}")
+	private int port;
+	
+	@Value("${spring.netty.auth.username}")
+	private String username;
+	
+	@Value("${spring.netty.auth.password}")
+	private String password;
+	
 	@Override
 	public void run(ApplicationArguments args) throws Exception {
-		StartupRunnable startup = new StartupRunnable("killbuff.com", 36500, "admin", "", forwardHandlerMap); 
+		StartupRunnable startup = new StartupRunnable(host, port, username, password, 
+				keystorePath,keystorePassword,forwardHandlerMap); 
 		startup.run();
 		AgentServer server = new AgentServer(50000, agentHandlerMap,forwardHandlerMap,nettyClientMap,remoteGroup,startup);
 		new Thread(server).start();

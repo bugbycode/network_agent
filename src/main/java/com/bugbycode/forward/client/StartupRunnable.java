@@ -3,6 +3,8 @@ package com.bugbycode.forward.client;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import javax.net.ssl.SSLEngine;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -15,6 +17,7 @@ import com.bugbycode.handler.MessageEncoder;
 import com.bugbycode.module.Authentication;
 import com.bugbycode.module.Message;
 import com.bugbycode.module.MessageCode;
+import com.util.ssl.SSLContextUtil;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelFuture;
@@ -25,6 +28,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 
 public class StartupRunnable implements Runnable {
@@ -39,16 +44,23 @@ public class StartupRunnable implements Runnable {
 	
 	private String password;
 	
+	private String keyStorePath;
+	
+	private String keyStorePassword;
+	
 	private Map<String,AgentHandler> agentHandlerMap;
 	
 	private ChannelFuture future;
 	
 	public StartupRunnable(String host, int port, String username, String password,
+			String keyStorePath,String keyStorePassword,
 			Map<String,AgentHandler> agentHandlerMap) {
 		this.host = host;
 		this.port = port;
 		this.username = username;
 		this.password = password;
+		this.keyStorePath = keyStorePath;
+		this.keyStorePassword = keyStorePassword;
 		this.agentHandlerMap = agentHandlerMap;
 	}
 
@@ -63,6 +75,12 @@ public class StartupRunnable implements Runnable {
 
 			@Override
 			protected void initChannel(SocketChannel ch) throws Exception {
+				
+				SslContext context = SSLContextUtil.getContext(keyStorePath, keyStorePassword);
+				SSLEngine engine = context.newEngine(ch.alloc());
+		        engine.setUseClientMode(true);
+		        ch.pipeline().addLast(new SslHandler(engine));
+		        
 				ch.pipeline().addLast(new IdleStateHandler(IdleConfig.READ_IDEL_TIME_OUT,
 						IdleConfig.WRITE_IDEL_TIME_OUT,
 						IdleConfig.ALL_IDEL_TIME_OUT, TimeUnit.SECONDS));
