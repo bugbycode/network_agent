@@ -76,7 +76,7 @@ public class StartupRunnable implements Runnable {
 			@Override
 			protected void initChannel(SocketChannel ch) throws Exception {
 				
-				SslContext context = SSLContextUtil.getContext(keyStorePath, keyStorePassword);
+				SslContext context = SSLContextUtil.getClientContext(keyStorePath, keyStorePassword);
 				SSLEngine engine = context.newEngine(ch.alloc());
 		        engine.setUseClientMode(true);
 		        ch.pipeline().addLast(new SslHandler(engine));
