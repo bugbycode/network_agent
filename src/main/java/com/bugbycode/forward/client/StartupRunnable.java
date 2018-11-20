@@ -122,7 +122,7 @@ public class StartupRunnable implements Runnable {
 		if(this.group != null) {
 			this.group.shutdownGracefully();
 		}
-		if(this.clientChannel != null) {
+		if(this.clientChannel != null && this.clientChannel.isOpen()) {
 			this.clientChannel.close();
 		}
 		this.run();
