@@ -179,9 +179,9 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 					if(client == null) {
 						throw new RuntimeException("token error.");
 					}
-					ByteBuf buff = ctx.alloc().buffer(data.length);
-					buff.writeBytes(data);
-					client.writeAndFlush(buff);
+//					ByteBuf buff = ctx.alloc().buffer(data.length);
+//					buff.writeBytes(data);
+					client.writeAndFlush(data);
 				}
 			}
 		}else {
@@ -196,9 +196,9 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 				if(client == null) {
 					throw new RuntimeException("token error.");
 				}
-				ByteBuf buff = ctx.alloc().buffer(data.length);
-				buff.writeBytes(data);
-				client.writeAndFlush(buff);
+//				ByteBuf buff = ctx.alloc().buffer(data.length);
+//				buff.writeBytes(data);
+				client.writeAndFlush(data);
 			}
 		}
 	}
@@ -273,7 +273,7 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 					}
 					
 					byte[] data = (byte[]) msg.getData();
-					ByteBuf buff = ctx.alloc().buffer(data.length);
+					ByteBuf buff = channel.alloc().buffer(data.length);
 					buff.writeBytes(data);
 					channel.writeAndFlush(buff);
 				} catch (InterruptedException e) {

@@ -12,6 +12,8 @@ import com.bugbycode.module.Message;
 import com.bugbycode.module.MessageCode;
 
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
@@ -19,7 +21,6 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.util.ReferenceCountUtil;
 
 public class NettyClient {
 	
@@ -42,6 +43,8 @@ public class NettyClient {
 	private Message msg;
 	
 	private String token = "";
+	
+	private Channel clientChannel;
 	
 	public NettyClient(Message msg,Map<String,NettyClient> nettyClientMap,
 			Map<String,AgentHandler> agentHandlerMap,EventLoopGroup remoteGroup) {
@@ -78,6 +81,7 @@ public class NettyClient {
 				if(future.isSuccess()) {
 					logger.info("Connection to " + host + ":" + port + " successfully.");
 					message.setType(MessageCode.CONNECTION_SUCCESS);
+					clientChannel = future.channel();
 				}else {
 					nettyClientMap.remove(token);
 					logger.info("Connection to " + host + ":" + port + " failed.");
@@ -91,11 +95,20 @@ public class NettyClient {
 		});
 	}
 	
-	public void writeAndFlush(Object msg) {
-		if(future == null) {
+//	public void writeAndFlush(Object msg) {
+//		if(future == null) {
+//			return;
+//		}
+//		future.channel().writeAndFlush(msg);
+//	}
+	
+	public void writeAndFlush(byte[] data) {
+		if(clientChannel == null) {
 			return;
 		}
-		future.channel().writeAndFlush(msg);
+		ByteBuf buff = clientChannel.alloc().buffer(data.length);
+		buff.writeBytes(data);
+		clientChannel.writeAndFlush(buff);
 	}
 	
 	public void close() {
