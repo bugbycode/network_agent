@@ -7,6 +7,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.bugbycode.agent.handler.AgentHandler;
+import com.bugbycode.forward.client.StartupRunnable;
 import com.bugbycode.module.Message;
 import com.bugbycode.module.MessageCode;
 
@@ -20,9 +21,12 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
 	private final Logger logger = LogManager.getLogger(ClientHandler.class);
 	
 	private Map<String,AgentHandler> agentHandlerMap;
+	
+	private StartupRunnable startup;
 
-	public ClientHandler(Map<String, AgentHandler> agentHandlerMap) {
+	public ClientHandler(StartupRunnable startup,Map<String, AgentHandler> agentHandlerMap) {
 		this.agentHandlerMap = agentHandlerMap;
+		this.startup = startup;
 	}
 
 	@Override
@@ -41,6 +45,7 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
 			Message message = new Message(token, MessageCode.CLOSE_CONNECTION, null);
 			handler.sendMessage(message);
 		}
+		this.startup.restart();
 	}
 
 	@Override

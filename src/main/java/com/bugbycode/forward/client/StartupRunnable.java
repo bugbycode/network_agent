@@ -20,6 +20,7 @@ import com.bugbycode.module.MessageCode;
 import com.util.ssl.SSLContextUtil;
 
 import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
@@ -52,6 +53,10 @@ public class StartupRunnable implements Runnable {
 	
 	private ChannelFuture future;
 	
+	private Channel clientChannel;
+	
+	private EventLoopGroup group;
+	
 	public StartupRunnable(String host, int port, String username, String password,
 			String keyStorePath,String keyStorePassword,
 			Map<String,AgentHandler> agentHandlerMap) {
@@ -67,7 +72,7 @@ public class StartupRunnable implements Runnable {
 	@Override
 	public void run() {
 		Bootstrap client = new Bootstrap();
-		EventLoopGroup group = new NioEventLoopGroup();
+		group = new NioEventLoopGroup();
 		client.group(group).channel(NioSocketChannel.class);
 		client.option(ChannelOption.TCP_NODELAY, true);
 		client.option(ChannelOption.SO_KEEPALIVE, true);
@@ -88,7 +93,7 @@ public class StartupRunnable implements Runnable {
 							HandlerConst.LENGTH_FIELD_LENGTH, HandlerConst.LENGTH_AD_JUSTMENT, 
 							HandlerConst.INITIAL_BYTES_TO_STRIP));
 				 ch.pipeline().addLast(new MessageEncoder());
-				 ch.pipeline().addLast(new ClientHandler(agentHandlerMap));
+				 ch.pipeline().addLast(new ClientHandler(StartupRunnable.this,agentHandlerMap));
 			}
 			
 		});
@@ -98,6 +103,7 @@ public class StartupRunnable implements Runnable {
 			@Override
 			public void operationComplete(ChannelFuture future) throws Exception {
 				if (future.isSuccess()) {
+					clientChannel = future.channel();
 					logger.info("Connection to " + host + ":" + port + " success...");
 					Message msg = new Message();
 					msg.setType(MessageCode.AUTH);
@@ -106,13 +112,23 @@ public class StartupRunnable implements Runnable {
 					writeAndFlush(msg);
 				 } else{
 					 logger.error("Connection to " + host + ":" + port + " failed...");
-					 group.shutdownGracefully();
+					 restart();
 				 }
 			}
 		});
 	}
 	
+	public void restart() {
+		if(this.group != null) {
+			this.group.shutdownGracefully();
+		}
+		if(this.clientChannel != null) {
+			this.clientChannel.close();
+		}
+		this.run();
+	}
+	
 	public void writeAndFlush(Object msg) {
-		future.channel().writeAndFlush(msg);
+		this.clientChannel.writeAndFlush(msg);
 	}
 }
