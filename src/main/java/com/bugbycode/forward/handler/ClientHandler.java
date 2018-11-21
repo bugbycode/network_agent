@@ -65,10 +65,12 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
 		}else {
 			AgentHandler handler = agentHandlerMap.get(token);
 			if(handler == null) {
-				message.setData(null);
-				message.setType(MessageCode.CLOSE_CONNECTION);
-				message.setToken(token);
-				ctx.writeAndFlush(message);
+				if(type != MessageCode.CLOSE_CONNECTION) {
+					message.setData(null);
+					message.setType(MessageCode.CLOSE_CONNECTION);
+					message.setToken(token);
+					ctx.writeAndFlush(message);
+				}
 				return;
 			}
 			handler.sendMessage(message);

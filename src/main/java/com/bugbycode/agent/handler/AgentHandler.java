@@ -212,6 +212,10 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 			client.close();
 		}
 		agentHandlerMap.remove(token);
+		if(isForward) {
+			Message message = new Message(token, MessageCode.CLOSE_CONNECTION, null);
+			startup.writeAndFlush(message);
+		}
 		forwardHandlerMap.remove(token);
 		this.isClosed = true;
 		notifyTask();
