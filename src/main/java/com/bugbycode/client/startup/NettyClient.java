@@ -26,8 +26,6 @@ public class NettyClient {
 	
 	private final Logger logger = LogManager.getLogger(NettyClient.class);
 	
-	private ChannelFuture future;
-	
 	private Bootstrap remoteClient;
 	
 	private EventLoopGroup remoteGroup;
@@ -74,7 +72,7 @@ public class NettyClient {
 			}
 		});
 		
-		future = this.remoteClient.connect(host, port).addListener(new ChannelFutureListener() {
+		this.remoteClient.connect(host, port).addListener(new ChannelFutureListener() {
 			@Override
 			public void operationComplete(ChannelFuture future) throws Exception {
 				Message message = new Message(token, MessageCode.CONNECTION_SUCCESS, null);
@@ -95,13 +93,6 @@ public class NettyClient {
 		});
 	}
 	
-//	public void writeAndFlush(Object msg) {
-//		if(future == null) {
-//			return;
-//		}
-//		future.channel().writeAndFlush(msg);
-//	}
-	
 	public void writeAndFlush(byte[] data) {
 		if(clientChannel == null) {
 			return;
@@ -112,16 +103,10 @@ public class NettyClient {
 	}
 	
 	public void close() {
-		if(future == null) {
-			return;
-		}
-		future.channel().close();
 		
-//		if(remoteGroup == null) {
-//			return;
-//		}
-//		
-//		remoteGroup.shutdownGracefully();
+		if(clientChannel != null && clientChannel.isOpen()) {
+			clientChannel.close();
+		}
 		
 		Message message = new Message(token, MessageCode.CLOSE_CONNECTION, null);
 		AgentHandler handler = agentHandlerMap.get(token);

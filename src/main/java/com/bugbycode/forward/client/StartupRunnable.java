@@ -51,8 +51,6 @@ public class StartupRunnable implements Runnable {
 	
 	private Map<String,AgentHandler> agentHandlerMap;
 	
-	private ChannelFuture future;
-	
 	private Channel clientChannel;
 	
 	private EventLoopGroup group;
@@ -98,7 +96,7 @@ public class StartupRunnable implements Runnable {
 			
 		});
 		
-		future = client.connect(host, port).addListener(new ChannelFutureListener() {
+		client.connect(host, port).addListener(new ChannelFutureListener() {
 			
 			@Override
 			public void operationComplete(ChannelFuture future) throws Exception {
@@ -129,6 +127,10 @@ public class StartupRunnable implements Runnable {
 	}
 	
 	public void writeAndFlush(Object msg) {
-		this.clientChannel.writeAndFlush(msg);
+		if(this.clientChannel != null && clientChannel.isOpen()) {
+			this.clientChannel.writeAndFlush(msg);
+		}else {
+			throw new RuntimeException("Unconnected forward server.");
+		}
 	}
 }

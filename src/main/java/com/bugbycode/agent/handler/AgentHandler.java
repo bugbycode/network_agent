@@ -226,7 +226,11 @@ public class AgentHandler extends SimpleChannelInboundHandler<ByteBuf> {
 	
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-		logger.error(cause.getMessage());
+		String error = cause.getMessage();
+		if(StringUtil.isBlank(error)) {
+			cause.printStackTrace();
+		}
+		logger.error(error);
 		ctx.channel().close();
 	}
 	
