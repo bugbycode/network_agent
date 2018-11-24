@@ -20,6 +20,9 @@ import com.bugbycode.module.MessageCode;
 import com.util.ssl.SSLContextUtil;
 
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.channel.AdaptiveRecvByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -72,18 +75,21 @@ public class StartupRunnable implements Runnable {
 		Bootstrap client = new Bootstrap();
 		group = new NioEventLoopGroup();
 		client.group(group).channel(NioSocketChannel.class);
+		client.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
+		client.option(ChannelOption.RCVBUF_ALLOCATOR, AdaptiveRecvByteBufAllocator.DEFAULT);
 		client.option(ChannelOption.TCP_NODELAY, true);
 		client.option(ChannelOption.SO_KEEPALIVE, true);
 		client.handler(new ChannelInitializer<SocketChannel>() {
 
 			@Override
 			protected void initChannel(SocketChannel ch) throws Exception {
-				
+				ch.config().setAllocator(UnpooledByteBufAllocator.DEFAULT);
+				/*
 				SslContext context = SSLContextUtil.getClientContext(keyStorePath, keyStorePassword);
 				SSLEngine engine = context.newEngine(ch.alloc());
 		        engine.setUseClientMode(true);
 		        ch.pipeline().addLast(new SslHandler(engine));
-		        
+		        */
 				ch.pipeline().addLast(new IdleStateHandler(IdleConfig.READ_IDEL_TIME_OUT,
 						IdleConfig.WRITE_IDEL_TIME_OUT,
 						IdleConfig.ALL_IDEL_TIME_OUT, TimeUnit.SECONDS));
