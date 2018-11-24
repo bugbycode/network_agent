@@ -11,6 +11,8 @@ import com.bugbycode.conf.AppConfig;
 import com.bugbycode.forward.client.StartupRunnable;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
@@ -59,13 +61,15 @@ public class AgentServer implements Runnable {
 		boss = new NioEventLoopGroup(AppConfig.WORK_THREAD_NUMBER);
 		worker = new NioEventLoopGroup(AppConfig.WORK_THREAD_NUMBER);
 		bootstrap.group(boss, worker).channel(NioServerSocketChannel.class)
+		.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
 		.option(ChannelOption.SO_BACKLOG, 5000)
-		.option(ChannelOption.TCP_NODELAY, true)
+		.childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
 		.childOption(ChannelOption.SO_KEEPALIVE, true)
 		.childHandler(new ChannelInitializer<SocketChannel>() {
 
 			@Override
 			protected void initChannel(SocketChannel ch) throws Exception {
+				ch.config().setAllocator(UnpooledByteBufAllocator.DEFAULT);
 				ch.pipeline().addLast(new AgentHandler(agentHandlerMap,
 						forwardHandlerMap,
 						nettyClientMap,remoteGroup,startup));
